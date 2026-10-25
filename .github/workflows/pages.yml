@@ -1,0 +1,53 @@
+name: Pages
+
+# Serves the shared General MIDI bank at https://swwallowws.github.io/sound/gm.sf3, the one
+# copy every studio on the site fetches (the design system's sound/soundfont.js).
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  site:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: The bank is a SoundFont 3 file, with its notice
+        run: |
+          head -c 4 gm.sf3 | grep -q RIFF
+          grep -q "GeneralUser GS" NOTICE
+      - name: Stage
+        run: |
+          mkdir _site
+          cp gm.sf3 NOTICE index.html _site/
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: site
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
+      - name: The bank answers
+        env:
+          BASE: ${{ steps.deployment.outputs.page_url }}
+        run: |
+          for attempt in 1 2 3 4 5 6; do
+            if curl -fsS -o /dev/null "${BASE}gm.sf3"; then echo "live: ${BASE}gm.sf3"; exit 0; fi
+            sleep 10
+          done
+          echo "not live: ${BASE}gm.sf3"; exit 1
